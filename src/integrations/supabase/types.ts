@@ -50,6 +50,167 @@ export type Database = {
           },
         ]
       }
+      daily_offers: {
+        Row: {
+          id: string
+          title: string
+          description: string | null
+          discount_percentage: number | null
+          image_url: string | null
+          is_active: boolean | null
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          title: string
+          description?: string | null
+          discount_percentage?: number | null
+          image_url?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          title?: string
+          description?: string | null
+          discount_percentage?: number | null
+          image_url?: string | null
+          is_active?: boolean | null
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      workout_exercises: {
+        Row: {
+          id: string
+          name: string
+          video_url: string | null
+          targeted_muscles: string[] | null
+          workout_type: string
+          description: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          video_url?: string | null
+          targeted_muscles?: string[] | null
+          workout_type: string
+          description?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          video_url?: string | null
+          targeted_muscles?: string[] | null
+          workout_type?: string
+          description?: string | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      workout_packages: {
+        Row: {
+          id: string
+          name: string
+          description: string | null
+          price: number | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          description?: string | null
+          price?: number | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          description?: string | null
+          price?: number | null
+          created_at?: string | null
+        }
+        Relationships: []
+      }
+      user_workout_access: {
+        Row: {
+          id: string
+          user_id: string
+          package_id: string
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          package_id: string
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          package_id?: string
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_workout_access_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_workout_access_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "workout_packages"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      user_workout_profiles: {
+        Row: {
+          id: string
+          user_id: string
+          fitness_goal: string
+          experience_level: string | null
+          assessment_completed: boolean | null
+          answers: Json | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          fitness_goal: string
+          experience_level?: string | null
+          assessment_completed?: boolean | null
+          answers?: Json | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          fitness_goal?: string
+          experience_level?: string | null
+          assessment_completed?: boolean | null
+          answers?: Json | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_workout_profiles_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       delivery_agents: {
         Row: {
           active: boolean | null
