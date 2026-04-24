@@ -563,6 +563,101 @@ export type Database = {
         }
         Relationships: []
       }
+      site_settings: {
+        Row: {
+          id: string
+          is_site_active: boolean
+          reopen_at: string | null
+          shutdown_message: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          id?: string
+          is_site_active?: boolean
+          reopen_at?: string | null
+          shutdown_message?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          id?: string
+          is_site_active?: boolean
+          reopen_at?: string | null
+          shutdown_message?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      vip_customers: {
+        Row: {
+          id: string
+          user_id: string
+          global_discount: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          global_discount?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          global_discount?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vip_customers_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: true
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      vip_product_discounts: {
+        Row: {
+          id: string
+          vip_id: string
+          product_id: string
+          discount_percentage: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          vip_id: string
+          product_id: string
+          discount_percentage: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          vip_id?: string
+          product_id?: string
+          discount_percentage?: number
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vip_product_discounts_vip_id_fkey"
+            columns: ["vip_id"]
+            isOneToOne: false
+            referencedRelation: "vip_customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vip_product_discounts_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never

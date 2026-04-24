@@ -10,7 +10,7 @@ const menuItems = [
   { title: "Revenue Analytics", url: "/admin/revenue", icon: TrendingUp },
   { title: "Products", url: "/admin/products", icon: Package },
   { title: "Orders", url: "/admin/orders", icon: ShoppingCart },
-  { title: "WolfWorkout", url: "/admin/vip-access", icon: Crown },
+  { title: "VIP Access", url: "/admin/vip-access", icon: Crown },
   { title: "Admin Temp Access", url: "/admin/temp-access", icon: UserCheck },
   { title: "Activity Log", url: "/admin/activity-log", icon: ScrollText },
   { title: "Daily Offers", url: "/admin/offers", icon: Sparkles },
