@@ -18,10 +18,12 @@ interface Product {
   stock_count: number | null;
   image_url: string | null;
   category: string | null;
+  flavors?: { name: string; image_url: string; stock: number; price?: number }[] | null;
 }
 
 interface CartItem extends Product {
   quantity: number;
+  selectedFlavor?: string;
 }
 
 export default function OfflineBilling() {
@@ -47,32 +49,75 @@ export default function OfflineBilling() {
     if (!session) return;
 
     // Get assigned store
-    const { data: adminData } = await supabase
+    const { data: adminData, error: adminError } = await supabase
       .from("store_admins")
-      .select("store_id, stores(name, upi_id)")
+      .select("store_id, stores(name)")
       .eq("user_id", session.user.id)
-      .single();
-
-    if (!adminData) {
-      toast.error("No store access found");
+      .maybeSingle();
+    
+    if (adminError) {
+      console.error("Store Admin Query Error:", adminError);
+      toast.error("Error accessing store data: " + adminError.message);
       setLoading(false);
       return;
     }
 
+    if (!adminData) {
+      // Check if user is super admin
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", session.user.id)
+        .eq("role", "admin")
+        .maybeSingle();
+
+      if (roleData) {
+        // If super admin, just fetch the first store for now or a default
+        const { data: firstStore } = await supabase.from("stores").select("id, name").limit(1).single();
+        if (firstStore) {
+          const currentStore = {
+            id: firstStore.id,
+            name: firstStore.name,
+            upi_id: null,
+          };
+          setStore(currentStore);
+          fetchProductsForStore(currentStore.id);
+          return;
+        }
+      }
+
+      toast.error("No store access found. Please ask an admin to assign you to a store.");
+      setLoading(false);
+      return;
+    }
+
+    // Fetch UPI ID separately to avoid issues if the column is missing/restricted
+    const { data: storeData } = await supabase
+      .from("stores")
+      .select("upi_id")
+      .eq("id", adminData.store_id)
+      .maybeSingle();
+
     const currentStore = {
       id: adminData.store_id,
       name: adminData.stores?.name || "Store",
-      upi_id: adminData.stores?.upi_id || null,
+      upi_id: storeData?.upi_id || null,
     };
     setStore(currentStore);
+    fetchProductsForStore(currentStore.id);
+  };
 
+  const fetchProductsForStore = async (storeId: string) => {
     // Get products for this store
-    const { data: productsData } = await supabase
+    const { data: productsData, error: prodError } = await supabase
       .from("products")
-      .select("id, name, price, stock_count, image_url, category")
-      .eq("store_id", currentStore.id)
+      .select("id, name, price, stock_count, image_url, category, flavors")
+      .eq("store_id", storeId)
       .order("name");
 
+    if (prodError) {
+      toast.error("Error loading products: " + prodError.message);
+    }
     setProducts(productsData || []);
     setLoading(false);
   };
@@ -82,21 +127,30 @@ export default function OfflineBilling() {
     (p.category && p.category.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const addToCart = (product: Product) => {
+  const addToCart = (product: Product, flavorName?: string) => {
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
+      const existing = prev.find(item => item.id === product.id && item.selectedFlavor === flavorName);
       if (existing) {
         return prev.map(item => 
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
+          (item.id === product.id && item.selectedFlavor === flavorName) ? { ...item, quantity: item.quantity + 1 } : item
         );
       }
-      return [...prev, { ...product, quantity: 1 }];
+      
+      let effectivePrice = product.price;
+      if (flavorName && product.flavors) {
+         const flavor = product.flavors.find(f => f.name === flavorName);
+         if (flavor && flavor.price) {
+           effectivePrice = flavor.price;
+         }
+      }
+      
+      return [...prev, { ...product, price: effectivePrice, quantity: 1, selectedFlavor: flavorName }];
     });
   };
 
-  const updateQuantity = (id: string, delta: number) => {
+  const updateQuantity = (id: string, flavorName: string | undefined, delta: number) => {
     setCart(prev => prev.map(item => {
-      if (item.id === id) {
+      if (item.id === id && item.selectedFlavor === flavorName) {
         const newQty = Math.max(1, item.quantity + delta);
         return { ...item, quantity: newQty };
       }
@@ -104,8 +158,8 @@ export default function OfflineBilling() {
     }));
   };
 
-  const removeFromCart = (id: string) => {
-    setCart(prev => prev.filter(item => item.id !== id));
+  const removeFromCart = (id: string, flavorName: string | undefined) => {
+    setCart(prev => prev.filter(item => !(item.id === id && item.selectedFlavor === flavorName)));
   };
 
   const totalAmount = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -152,9 +206,35 @@ export default function OfflineBilling() {
 
       // 3. Decrement stock
       for (const item of cart) {
-        if (item.stock_count !== null) {
-          const newStock = Math.max(0, item.stock_count - item.quantity);
-          await supabase.from("products").update({ stock_count: newStock }).eq("id", item.id);
+        // Fetch fresh stock and flavors first
+        const { data: currentProduct } = await supabase
+          .from("products")
+          .select("stock_count, flavors")
+          .eq("id", item.id)
+          .single();
+
+        if (currentProduct) {
+          const updates: any = {};
+          
+          if (currentProduct.stock_count !== null) {
+            updates.stock_count = Math.max(0, currentProduct.stock_count - item.quantity);
+          }
+
+          if (item.selectedFlavor && currentProduct.flavors && Array.isArray(currentProduct.flavors)) {
+            updates.flavors = (currentProduct.flavors as any[]).map((f: any) => {
+              if (typeof f === 'object' && f.name === item.selectedFlavor) {
+                return { ...f, stock: Math.max(0, (f.stock ?? (currentProduct.stock_count || 0)) - item.quantity) };
+              }
+              return f;
+            });
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await supabase
+              .from("products")
+              .update(updates)
+              .eq("id", item.id);
+          }
         }
       }
 
@@ -170,9 +250,9 @@ export default function OfflineBilling() {
       setCustomerPhone("");
       toast.success("Bill generated successfully!");
       fetchStoreAndProducts(); // Refresh stock counts
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error generating bill:", error);
-      toast.error("Failed to generate bill");
+      toast.error("Failed to generate bill: " + (error.message || "Unknown error"));
     } finally {
       setGenerating(false);
     }
@@ -252,8 +332,7 @@ export default function OfflineBilling() {
                   {filteredProducts.map(product => (
                     <div 
                       key={product.id}
-                      onClick={() => addToCart(product)}
-                      className="group cursor-pointer border border-border rounded-lg p-3 hover:border-primary hover:shadow-md transition-all bg-card"
+                      className="group border border-border rounded-lg p-3 hover:shadow-md transition-all bg-card"
                     >
                       {product.image_url && (
                         <div className="aspect-square rounded-md overflow-hidden mb-2 bg-secondary">
@@ -261,10 +340,45 @@ export default function OfflineBilling() {
                         </div>
                       )}
                       <h3 className="font-medium text-sm line-clamp-1">{product.name}</h3>
-                      <div className="flex items-center justify-between mt-2">
+                      
+                      {product.flavors && product.flavors.length > 0 ? (
+                        <div className="mt-2 space-y-1">
+                          <p className="text-xs text-muted-foreground mb-1">Select Flavor:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {product.flavors.map(f => (
+                              <Button 
+                                key={f.name}
+                                variant="outline" 
+                                size="sm" 
+                                className={`h-auto min-h-[1.75rem] py-1 px-2 text-[10px] flex flex-col items-center leading-tight ${f.stock <= 0 ? 'opacity-40 cursor-not-allowed' : ''}`}
+                                onClick={() => f.stock > 0 && addToCart(product, f.name)}
+                                disabled={f.stock <= 0}
+                              >
+                                <span>{f.name} ({f.stock})</span>
+                                {f.price && f.price !== product.price && (
+                                  <span className="text-primary font-bold">₹{f.price}</span>
+                                )}
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="mt-2">
+                          <Button 
+                            className="w-full h-8 text-xs" 
+                            size="sm"
+                            onClick={() => addToCart(product)}
+                            disabled={(product.stock_count ?? 0) <= 0}
+                          >
+                            Add to Cart
+                          </Button>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between mt-2 pt-2 border-t border-border/50">
                         <p className="text-primary font-bold">₹{product.price}</p>
                         <p className={`text-xs ${product.stock_count && product.stock_count < 10 ? "text-orange-500" : "text-muted-foreground"}`}>
-                          {product.stock_count !== null ? `${product.stock_count} in stock` : "Infinite"}
+                          {product.stock_count !== null ? `${product.stock_count} Total` : "Infinite"}
                         </p>
                       </div>
                     </div>
@@ -291,17 +405,19 @@ export default function OfflineBilling() {
               <CardContent className="space-y-6">
                 <div className="space-y-4 max-h-[40vh] overflow-y-auto pr-2">
                   {cart.map(item => (
-                    <div key={item.id} className="flex items-center gap-3 bg-secondary/30 p-2 rounded-lg border border-border/50">
+                    <div key={`${item.id}-${item.selectedFlavor}`} className="flex items-center gap-3 bg-secondary/30 p-2 rounded-lg border border-border/50">
                       <div className="flex-1">
                         <p className="text-sm font-medium line-clamp-1">{item.name}</p>
-                        <p className="text-xs text-muted-foreground">₹{item.price} each</p>
+                        <p className="text-[10px] text-muted-foreground">
+                          {item.selectedFlavor ? `Flavor: ${item.selectedFlavor}` : "No Flavor"} | ₹{item.price} each
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button 
                           variant="outline" 
                           size="icon" 
                           className="h-7 w-7"
-                          onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, -1); }}
+                          onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, item.selectedFlavor, -1); }}
                         >
                           <Minus className="w-3 h-3" />
                         </Button>
@@ -310,7 +426,7 @@ export default function OfflineBilling() {
                           variant="outline" 
                           size="icon" 
                           className="h-7 w-7"
-                          onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, 1); }}
+                          onClick={(e) => { e.stopPropagation(); updateQuantity(item.id, item.selectedFlavor, 1); }}
                         >
                           <Plus className="w-3 h-3" />
                         </Button>
@@ -318,7 +434,7 @@ export default function OfflineBilling() {
                           variant="ghost" 
                           size="icon" 
                           className="h-7 w-7 text-destructive"
-                          onClick={(e) => { e.stopPropagation(); removeFromCart(item.id); }}
+                          onClick={(e) => { e.stopPropagation(); removeFromCart(item.id, item.selectedFlavor); }}
                         >
                           <Trash2 className="w-3 h-3" />
                         </Button>
@@ -412,7 +528,7 @@ export default function OfflineBilling() {
                 <tbody>
                   {lastBill?.items.map((item, i) => (
                     <tr key={i} className="text-[10px]">
-                      <td>{item.product_name}</td>
+                      <td>{item.product_name} {item.selected_flavor && `(${item.selected_flavor})`}</td>
                       <td>{item.quantity}</td>
                       <td>₹{item.price}</td>
                       <td>₹{item.subtotal}</td>

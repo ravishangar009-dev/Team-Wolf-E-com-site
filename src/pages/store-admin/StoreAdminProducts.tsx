@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
-import { ProductImageUpload } from "@/components/admin/ProductImageUpload";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Plus, Edit, Trash2 } from "lucide-react";
@@ -32,7 +31,8 @@ const StoreAdminProducts = () => {
     image_url: "",
     stock_count: 0,
     alert_count: 5,
-    flavors: [] as string[],
+    flavors: [] as { name: string; image_url: string; stock: number; price?: number }[],
+    usage_guide: "",
   });
 
   const fetchStoreAndProducts = async () => {
@@ -84,6 +84,7 @@ const StoreAdminProducts = () => {
       stock_count: 0,
       alert_count: 5,
       flavors: [],
+      usage_guide: "",
     });
     setIsDialogOpen(true);
   };
@@ -92,12 +93,15 @@ const StoreAdminProducts = () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
 
+    const detailsString = typeof details === 'object' ? JSON.stringify(details) : details;
+
     await supabase.from("product_audit_log").insert({
-      user_id: session.user.id,
+      changed_by: session.user.id,
+      changed_by_email: session.user.email,
       action,
       product_name: productName,
       product_id: productId,
-      details,
+      details: detailsString,
     });
   };
 
@@ -106,49 +110,65 @@ const StoreAdminProducts = () => {
     if (!store) return;
     setSaving(true);
 
-    const productData = {
-      name: formData.name,
-      description: formData.description,
-      price: Number(formData.price),
-      category: formData.category,
-      in_stock: formData.in_stock,
-      image_url: formData.image_url,
-      stock_count: Number(formData.stock_count),
-      alert_count: Number(formData.alert_count),
-      flavors: formData.flavors.filter(f => f.trim() !== ""),
-      store_id: store.id,
-    };
+    try {
+      const productData = {
+        name: formData.name,
+        description: formData.description,
+        price: Number(formData.price),
+        category: formData.category,
+        in_stock: formData.in_stock,
+        image_url: formData.image_url,
+        stock_count: Number(formData.stock_count),
+        alert_count: Number(formData.alert_count),
+        flavors: formData.flavors.filter(f => f.name.trim() !== ""),
+        store_id: store.id,
+        usage_guide: formData.usage_guide || null,
+      };
 
-    if (formData.id) {
-      const { error } = await supabase
-        .from("products")
-        .update(productData)
-        .eq("id", formData.id);
+      if (formData.id) {
+        const { error } = await supabase
+          .from("products")
+          .update(productData)
+          .eq("id", formData.id);
 
-      if (error) {
-        toast.error("Failed to update product");
+        if (error) {
+          console.error("Update error:", error);
+          toast.error("Failed to update product: " + error.message);
+        } else {
+          toast.success("Product updated successfully");
+          try {
+            await logProductAction("edited", formData.name, formData.id, { changes: productData });
+          } catch (logError) {
+            console.error("Failed to log action:", logError);
+          }
+        }
       } else {
-        toast.success("Product updated");
-        await logProductAction("EDIT", formData.name, formData.id, { changes: productData });
-      }
-    } else {
-      const { data, error } = await supabase
-        .from("products")
-        .insert([productData])
-        .select()
-        .single();
+        const { data, error } = await supabase
+          .from("products")
+          .insert([productData])
+          .select()
+          .single();
 
-      if (error) {
-        toast.error("Failed to default product");
-      } else {
-        toast.success("Product added");
-        await logProductAction("ADD", formData.name, data?.id, productData);
+        if (error) {
+          console.error("Insert error:", error);
+          toast.error("Failed to add product: " + error.message);
+        } else {
+          toast.success("Product added successfully");
+          try {
+            await logProductAction("added", formData.name, data?.id, productData);
+          } catch (logError) {
+            console.error("Failed to log action:", logError);
+          }
+        }
       }
+      setIsDialogOpen(false);
+      fetchStoreAndProducts();
+    } catch (err) {
+      console.error("Submit error:", err);
+      toast.error("An unexpected error occurred");
+    } finally {
+      setSaving(false);
     }
-
-    setSaving(false);
-    setIsDialogOpen(false);
-    fetchStoreAndProducts();
   };
 
   const handleDelete = async (id: string, name: string) => {
@@ -156,10 +176,11 @@ const StoreAdminProducts = () => {
 
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) {
-      toast.error("Failed to delete product");
+      console.error("Delete error:", error);
+      toast.error("Failed to delete product: " + error.message);
     } else {
-      toast.success("Product deleted");
-      await logProductAction("DELETE", name, id, null);
+      toast.success("Product deleted successfully");
+      await logProductAction("deleted", name, id, null);
       fetchStoreAndProducts();
     }
   };
@@ -207,7 +228,16 @@ const StoreAdminProducts = () => {
                   variant="outline" 
                   size="icon"
                   onClick={() => {
-                    setFormData({ ...p, price: p.price.toString() });
+                    setFormData({ 
+                      ...p, 
+                      price: p.price.toString(),
+                      flavors: (p.flavors || []).map((f: any) => 
+                        typeof f === 'string' 
+                          ? { name: f, image_url: "", stock: p.stock_count || 0, price: p.price } 
+                          : { name: f.name || "", image_url: f.image_url || "", stock: f.stock ?? 0, price: f.price ?? p.price }
+                      ),
+                      usage_guide: p.usage_guide || "",
+                    });
                     setIsDialogOpen(true);
                   }}
                 >
@@ -275,29 +305,72 @@ const StoreAdminProducts = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium block mb-2">Flavors</label>
-                  <div className="space-y-2">
+                  <label className="text-sm font-medium block mb-2">Flavors (Separate Stock per Flavor)</label>
+                  <div className="space-y-3">
                     {formData.flavors.map((flavor, index) => (
-                      <div key={index} className="flex items-center gap-2">
-                        <Input 
-                          value={flavor} 
-                          onChange={(e) => {
-                            const newFlavors = [...formData.flavors];
-                            newFlavors[index] = e.target.value;
-                            setFormData({ ...formData, flavors: newFlavors });
-                          }} 
-                          placeholder="e.g. Chocolate" 
-                        />
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="icon"
-                          onClick={() => {
-                            const newFlavors = formData.flavors.filter((_, i) => i !== index);
-                            setFormData({ ...formData, flavors: newFlavors });
-                          }}>
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
+                      <div key={index} className="flex flex-col gap-2 p-3 border rounded-md bg-muted/20">
+                        <div className="flex items-center gap-2">
+                          <Input 
+                            value={flavor.name} 
+                            onChange={(e) => {
+                              const newFlavors = [...formData.flavors];
+                              newFlavors[index].name = e.target.value;
+                              setFormData({ ...formData, flavors: newFlavors });
+                            }} 
+                            placeholder="Flavor name (e.g. Chocolate)" 
+                          />
+                          <Input 
+                            value={flavor.image_url} 
+                            onChange={(e) => {
+                              const newFlavors = [...formData.flavors];
+                              newFlavors[index].image_url = e.target.value;
+                              setFormData({ ...formData, flavors: newFlavors });
+                            }} 
+                            placeholder="Flavor Image URL (Optional)" 
+                          />
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon"
+                            className="flex-shrink-0"
+                            onClick={() => {
+                              const newFlavors = formData.flavors.filter((_, i) => i !== index);
+                              setFormData({ ...formData, flavors: newFlavors });
+                            }}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Flavor Stock</label>
+                            <Input 
+                              type="number"
+                              value={flavor.stock} 
+                              onChange={(e) => {
+                                const newFlavors = [...formData.flavors];
+                                newFlavors[index].stock = Number(e.target.value);
+                                setFormData({ ...formData, flavors: newFlavors });
+                              }} 
+                              min="0"
+                              className="h-8"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-[10px] font-bold uppercase text-muted-foreground ml-1">Flavor Price (₹)</label>
+                            <Input 
+                              type="number"
+                              value={flavor.price} 
+                              onChange={(e) => {
+                                const newFlavors = [...formData.flavors];
+                                newFlavors[index].price = Number(e.target.value);
+                                setFormData({ ...formData, flavors: newFlavors });
+                              }} 
+                              min="0"
+                              className="h-8"
+                              placeholder={formData.price}
+                            />
+                          </div>
+                        </div>
                       </div>
                     ))}
                     <Button 
@@ -305,7 +378,7 @@ const StoreAdminProducts = () => {
                       variant="outline" 
                       size="sm" 
                       className="w-full"
-                      onClick={() => setFormData({ ...formData, flavors: [...formData.flavors, ""] })}>
+                      onClick={() => setFormData({ ...formData, flavors: [...formData.flavors, { name: "", image_url: "", stock: 0, price: Number(formData.price) || 0 }] })}>
                       <Plus className="w-4 h-4 mr-2" /> Add Flavor
                     </Button>
                   </div>
@@ -329,19 +402,41 @@ const StoreAdminProducts = () => {
               
               <div className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium block mb-2">Product Image</label>
-                  <ProductImageUpload
-                    productId={formData.id || "new"}
-                    currentImage={formData.image_url}
-                    onUploadComplete={(url) => setFormData({ ...formData, image_url: url })}
-                  />
+                  <label className="text-sm font-medium block mb-2">Product Image URL</label>
+                  <div className="space-y-2">
+                    <Input 
+                      value={formData.image_url}
+                      onChange={e => setFormData({ ...formData, image_url: e.target.value })}
+                      placeholder="https://example.com/image.jpg"
+                    />
+                    {formData.image_url && (
+                      <div className="relative w-full aspect-square border rounded-md overflow-hidden bg-muted">
+                        <img src={formData.image_url} alt="Preview" className="w-full h-full object-cover" />
+                        <button 
+                          className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                          onClick={() => setFormData({ ...formData, image_url: "" })}
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium block mb-2">Description</label>
                   <Textarea 
                     value={formData.description}
                     onChange={e => setFormData({ ...formData, description: e.target.value })}
-                    className="h-32"
+                    className="h-24"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-2">How to Use (User Manual Guide)</label>
+                  <Textarea 
+                    value={formData.usage_guide}
+                    onChange={e => setFormData({ ...formData, usage_guide: e.target.value })}
+                    className="h-24"
+                    placeholder="Instructions on how to use this product..."
                   />
                 </div>
               </div>

@@ -94,7 +94,7 @@ const AdminStores = () => {
 
     const storeData = {
       name: formData.name,
-      category: formData.category,
+      category: "Supplement", // Hardcoded since UI option is removed
       address: formData.address || null,
       phone: formData.phone || null,
       delivery_time: formData.delivery_time || null,
@@ -164,10 +164,6 @@ const AdminStores = () => {
                   <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
                 </div>
                 <div>
-                  <Label htmlFor="category">Category *</Label>
-                  <Input id="category" placeholder="e.g., Grocery, Restaurant" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} required />
-                </div>
-                <div>
                   <Label htmlFor="address">Address</Label>
                   <Input id="address" value={formData.address} onChange={(e) => setFormData({ ...formData, address: e.target.value })} />
                 </div>
@@ -223,7 +219,6 @@ const AdminStores = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Category</TableHead>
                     <TableHead>Address</TableHead>
                     <TableHead>Phone</TableHead>
                     <TableHead>Status</TableHead>
@@ -234,7 +229,6 @@ const AdminStores = () => {
                   {stores.map((store) => (
                     <TableRow key={store.id}>
                       <TableCell className="font-medium">{store.name}</TableCell>
-                      <TableCell>{store.category}</TableCell>
                       <TableCell className="max-w-[200px] truncate">{store.address || "-"}</TableCell>
                       <TableCell>{store.phone || "-"}</TableCell>
                       <TableCell>

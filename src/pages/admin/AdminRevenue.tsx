@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TrendingUp, ShoppingBag, Receipt, ArrowUpRight, ArrowDownRight, Calendar, Filter } from "lucide-react";
+import { TrendingUp, ShoppingBag, Receipt, ArrowUpRight, ArrowDownRight, Calendar, Filter, Trash2, Download } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { format, startOfDay, subDays, startOfWeek, startOfMonth } from "date-fns";
 
@@ -81,6 +83,103 @@ export default function AdminRevenue() {
     }
   };
 
+  const handleClearRevenue = async () => {
+    if (!confirm("Are you sure you want to clear all revenue data? This will permanently delete all online orders and offline bills. This action cannot be undone.")) return;
+
+    setLoading(true);
+    try {
+      // Delete all offline bills (cascades to items)
+      const { error: offlineError } = await supabase
+        .from("offline_bills")
+        .delete()
+        .filter("id", "neq", "00000000-0000-0000-0000-000000000000");
+
+      if (offlineError) throw offlineError;
+
+      // Delete all online orders (cascades to items)
+      const { error: onlineError } = await supabase
+        .from("orders")
+        .delete()
+        .filter("id", "neq", "00000000-0000-0000-0000-000000000000");
+
+      if (onlineError) throw onlineError;
+
+      toast.success("All revenue data has been cleared successfully");
+      fetchRevenueData();
+    } catch (error: any) {
+      console.error("Error clearing revenue:", error);
+      toast.error("Failed to clear revenue data: " + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExport = async () => {
+    setLoading(true);
+    let startDate: Date | null = null;
+    const now = new Date();
+
+    if (timeRange === "today") startDate = startOfDay(now);
+    else if (timeRange === "week") startDate = startOfWeek(now);
+    else if (timeRange === "month") startDate = startOfMonth(now);
+    else if (timeRange === "last7") startDate = subDays(now, 7);
+
+    try {
+      let onlineQuery = supabase.from("orders").select("id, total_amount, status, created_at");
+      if (startDate) onlineQuery = onlineQuery.gte("created_at", startDate.toISOString());
+      const { data: onlineData } = await onlineQuery;
+      
+      let offlineQuery = supabase.from("offline_bills").select("id, total_amount, customer_name, created_at, payment_method");
+      if (startDate) offlineQuery = offlineQuery.gte("created_at", startDate.toISOString());
+      const { data: offlineData } = await offlineQuery;
+
+      const rows = [];
+      rows.push(["Type", "Date", "Customer", "Amount", "Status/Method"]);
+
+      if (onlineData) {
+        onlineData.forEach(o => {
+          if (o.status !== "cancelled") {
+            rows.push([
+              "Online",
+              format(new Date(o.created_at), "yyyy-MM-dd HH:mm"),
+              "Online Customer",
+              o.total_amount,
+              o.status
+            ]);
+          }
+        });
+      }
+
+      if (offlineData) {
+        offlineData.forEach(o => {
+          rows.push([
+            "Offline",
+            format(new Date(o.created_at), "yyyy-MM-dd HH:mm"),
+            o.customer_name || "Guest",
+            o.total_amount,
+            o.payment_method || "Cash"
+          ]);
+        });
+      }
+
+      const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `revenue_report_${timeRange}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("Data exported successfully");
+    } catch (error) {
+      console.error("Export error:", error);
+      toast.error("Failed to export data");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const offlineShare = stats.totalRevenue > 0 ? (stats.offlineRevenue / stats.totalRevenue) * 100 : 0;
   const onlineShare = stats.totalRevenue > 0 ? (stats.onlineRevenue / stats.totalRevenue) * 100 : 0;
 
@@ -107,6 +206,24 @@ export default function AdminRevenue() {
                 <SelectItem value="month">This Month</SelectItem>
               </SelectContent>
             </Select>
+            <Button 
+              variant="outline" 
+              size="icon" 
+              onClick={handleExport}
+              title="Export to Excel/CSV"
+              className="shrink-0"
+            >
+              <Download className="w-4 h-4" />
+            </Button>
+            <Button 
+              variant="destructive" 
+              size="icon" 
+              onClick={handleClearRevenue}
+              title="Clear All Revenue Data"
+              className="shrink-0"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
           </div>
         </div>
 

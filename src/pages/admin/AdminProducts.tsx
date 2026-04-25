@@ -28,6 +28,7 @@ interface ProductData {
   offer_percentage: number | null;
   offer_price: number | null;
   offer_active: boolean | null;
+  usage_guide?: string | null;
   stores?: { name: string };
 }
 
@@ -52,9 +53,10 @@ const AdminProducts = () => {
     in_stock: true,
     stock_count: 0,
     alert_count: 5,
-    flavors: [] as { name: string; image_url: string }[],
+    flavors: [] as { name: string; image_url: string; stock: number; price?: number }[],
     offer_percentage: "",
     offer_active: false,
+    usage_guide: "",
   });
 
   const fetchProducts = async () => {
@@ -92,8 +94,25 @@ const AdminProducts = () => {
       flavors: [],
       offer_percentage: "",
       offer_active: false,
+      usage_guide: "",
     });
     setEditingProduct(null);
+  };
+
+  const logProductAction = async (action: string, productName: string, productId: string | null, details: any) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+
+    const detailsString = typeof details === 'object' ? JSON.stringify(details) : details;
+
+    await supabase.from("product_audit_log").insert({
+      changed_by: session.user.id,
+      changed_by_email: session.user.email,
+      action,
+      product_name: productName,
+      product_id: productId,
+      details: detailsString,
+    });
   };
 
   const handleEdit = (product: ProductData) => {
@@ -108,11 +127,18 @@ const AdminProducts = () => {
       in_stock: product.in_stock ?? true,
       stock_count: product.stock_count ?? 0,
       alert_count: product.alert_count ?? 5,
-      flavors: (product.flavors || []).map((f: any) => 
-        typeof f === 'string' ? { name: f, image_url: "" } : { name: f.name || "", image_url: f.image_url || "" }
-      ),
+      flavors: (product.flavors || []).map((f: any) => {
+        if (typeof f === 'string') return { name: f, image_url: "", stock: product.stock_count || 0 };
+        return { 
+          name: f.name || "", 
+          image_url: f.image_url || "", 
+          stock: f.stock ?? (product.stock_count || 0),
+          price: f.price ?? (product.price || 0)
+        };
+      }),
       offer_percentage: product.offer_percentage?.toString() || "",
       offer_active: product.offer_active ?? false,
+      usage_guide: product.usage_guide || "",
     });
     setDialogOpen(true);
   };
@@ -140,22 +166,35 @@ const AdminProducts = () => {
       offer_percentage: offerPercentage,
       offer_price: offerPrice,
       offer_active: formData.offer_active,
+      usage_guide: formData.usage_guide || null,
     };
 
     if (editingProduct) {
       const { error } = await supabase.from("products").update(productData).eq("id", editingProduct.id);
       if (error) {
-        toast.error("Failed to update product");
-        return;
+        console.error("Update error:", error);
+        toast.error("Failed to update product: " + error.message);
+      } else {
+        toast.success("Product updated");
+        try {
+          await logProductAction("edited", formData.name, editingProduct.id, { changes: productData });
+        } catch (logError) {
+          console.error("Failed to log action:", logError);
+        }
       }
-      toast.success("Product updated successfully");
     } else {
-      const { error } = await supabase.from("products").insert(productData);
+      const { data, error } = await supabase.from("products").insert(productData).select().single();
       if (error) {
-        toast.error("Failed to create product");
-        return;
+        console.error("Insert error:", error);
+        toast.error("Failed to add product: " + error.message);
+      } else {
+        toast.success("Product added");
+        try {
+          await logProductAction("added", formData.name, data?.id, productData);
+        } catch (logError) {
+          console.error("Failed to log action:", logError);
+        }
       }
-      toast.success("Product created successfully");
     }
 
     setDialogOpen(false);
@@ -166,13 +205,18 @@ const AdminProducts = () => {
   const handleDelete = async (id: string) => {
     if (!confirm("Are you sure you want to delete this product?")) return;
 
+    const productToDelete = products.find(p => p.id === id);
     const { error } = await supabase.from("products").delete().eq("id", id);
     if (error) {
-      toast.error("Failed to delete product");
-      return;
+      console.error("Delete error:", error);
+      toast.error("Failed to delete product: " + error.message);
+    } else {
+      toast.success("Product deleted successfully");
+      if (productToDelete) {
+        await logProductAction("deleted", productToDelete.name, id, null);
+      }
+      fetchProducts();
     }
-    toast.success("Product deleted successfully");
-    fetchProducts();
   };
 
   return (
@@ -201,8 +245,30 @@ const AdminProducts = () => {
                   <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required />
                 </div>
                 <div>
+                  <Label htmlFor="store">Assign to Store *</Label>
+                  <Select 
+                    value={formData.store_id} 
+                    onValueChange={(value) => setFormData({ ...formData, store_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a store" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {stores.map((store) => (
+                        <SelectItem key={store.id} value={store.id}>
+                          {store.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
                   <Label htmlFor="description">Description</Label>
                   <Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} />
+                </div>
+                <div>
+                  <Label htmlFor="usage_guide">How to Use (User Manual Guide)</Label>
+                  <Textarea id="usage_guide" placeholder="Instructions on how to use this product..." value={formData.usage_guide} onChange={(e) => setFormData({ ...formData, usage_guide: e.target.value })} />
                 </div>
                 <div>
                   <Label htmlFor="price">Price (₹) *</Label>
@@ -220,43 +286,77 @@ const AdminProducts = () => {
                   <Label>Flavors</Label>
                   <div className="space-y-2 mt-2">
                     {formData.flavors.map((flavor, index) => (
-                      <div key={index} className="flex gap-2 items-start border p-2 rounded relative">
-                        <div className="flex-1 space-y-2">
-                          <Input 
-                            value={flavor.name} 
-                            onChange={(e) => {
-                              const newFlavors = [...formData.flavors];
-                              newFlavors[index].name = e.target.value;
+                      <div key={index} className="flex flex-col gap-2 border p-3 rounded bg-muted/20 relative">
+                        <div className="flex gap-2 items-start">
+                          <div className="flex-1 space-y-2">
+                            <Input 
+                              value={flavor.name} 
+                              onChange={(e) => {
+                                const newFlavors = [...formData.flavors];
+                                newFlavors[index].name = e.target.value;
+                                setFormData({ ...formData, flavors: newFlavors });
+                              }} 
+                              placeholder="Flavor name (e.g. Chocolate)" 
+                            />
+                            <Input 
+                              value={flavor.image_url} 
+                              onChange={(e) => {
+                                const newFlavors = [...formData.flavors];
+                                newFlavors[index].image_url = e.target.value;
+                                setFormData({ ...formData, flavors: newFlavors });
+                              }} 
+                              placeholder="Flavor Image URL (Optional)" 
+                            />
+                            <div className="flex items-center gap-4">
+                              <div className="flex-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Stock:</Label>
+                                <Input 
+                                  type="number"
+                                  value={flavor.stock} 
+                                  onChange={(e) => {
+                                    const newFlavors = [...formData.flavors];
+                                    newFlavors[index].stock = Number(e.target.value);
+                                    setFormData({ ...formData, flavors: newFlavors });
+                                  }} 
+                                  min="0"
+                                  className="h-8"
+                                />
+                              </div>
+                              <div className="flex-1">
+                                <Label className="text-[10px] uppercase font-bold text-muted-foreground">Price (₹):</Label>
+                                <Input 
+                                  type="number"
+                                  value={flavor.price} 
+                                  onChange={(e) => {
+                                    const newFlavors = [...formData.flavors];
+                                    newFlavors[index].price = Number(e.target.value);
+                                    setFormData({ ...formData, flavors: newFlavors });
+                                  }} 
+                                  min="0"
+                                  className="h-8"
+                                  placeholder={formData.price.toString()}
+                                />
+                              </div>
+                            </div>
+                          </div>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon"
+                            onClick={() => {
+                              const newFlavors = formData.flavors.filter((_, i) => i !== index);
                               setFormData({ ...formData, flavors: newFlavors });
-                            }} 
-                            placeholder="Flavor name (e.g. Chocolate)" 
-                          />
-                          <Input 
-                            value={flavor.image_url} 
-                            onChange={(e) => {
-                              const newFlavors = [...formData.flavors];
-                              newFlavors[index].image_url = e.target.value;
-                              setFormData({ ...formData, flavors: newFlavors });
-                            }} 
-                            placeholder="Flavor Image URL (Optional)" 
-                          />
+                            }}>
+                            <Trash2 className="w-4 h-4 text-destructive" />
+                          </Button>
                         </div>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          onClick={() => {
-                            const newFlavors = formData.flavors.filter((_, i) => i !== index);
-                            setFormData({ ...formData, flavors: newFlavors });
-                          }}>
-                          <Trash2 className="w-4 h-4 text-destructive" />
-                        </Button>
                       </div>
                     ))}
                     <Button 
                       type="button" 
                       variant="outline" 
                       size="sm" 
-                      onClick={() => setFormData({ ...formData, flavors: [...formData.flavors, { name: "", image_url: "" }] })}>
+                      onClick={() => setFormData({ ...formData, flavors: [...formData.flavors, { name: "", image_url: "", stock: 0, price: Number(formData.price) || 0 }] })}>
                       <Plus className="w-4 h-4 mr-2" /> Add Flavor
                     </Button>
                   </div>

@@ -1,4 +1,4 @@
-import { Package, ShoppingCart, BarChart3, Home, LogOut, Sparkles, UserCheck, Truck, Image, ScrollText, AlertTriangle, TrendingUp, Crown, Dumbbell } from "lucide-react";
+import { Package, ShoppingCart, BarChart3, Home, LogOut, Sparkles, UserCheck, Truck, Image, ScrollText, AlertTriangle, TrendingUp, Crown, Dumbbell, Store } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -7,6 +7,7 @@ import teamWolfLogo from "@/assets/teamwolf-logo.png";
 
 const menuItems = [
   { title: "Dashboard", url: "/admin", icon: BarChart3 },
+  { title: "Stores", url: "/admin/stores", icon: Store },
   { title: "Revenue Analytics", url: "/admin/revenue", icon: TrendingUp },
   { title: "Products", url: "/admin/products", icon: Package },
   { title: "Orders", url: "/admin/orders", icon: ShoppingCart },

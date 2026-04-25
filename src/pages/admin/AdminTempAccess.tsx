@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, UserCheck, Info } from "lucide-react";
@@ -28,6 +29,7 @@ const AdminTempAccess = () => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [userId, setUserId] = useState("");
+  const [selectedStoreId, setSelectedStoreId] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const fetchData = async () => {
@@ -62,17 +64,15 @@ const AdminTempAccess = () => {
       return;
     }
 
-    // Use the first store (single shop model)
-    const storeId = stores[0]?.id;
-    if (!storeId) {
-      toast.error("No store found. Please create a store first in the database.");
+    if (!selectedStoreId) {
+      toast.error("Please select a store.");
       setSubmitting(false);
       return;
     }
 
     const { error } = await supabase.from("store_admins").insert({
       user_id: userId,
-      store_id: storeId,
+      store_id: selectedStoreId,
     });
 
     if (error) {
@@ -85,6 +85,7 @@ const AdminTempAccess = () => {
     toast.success("Temp admin access granted!");
     setDialogOpen(false);
     setUserId("");
+    setSelectedStoreId("");
     fetchData();
     setSubmitting(false);
   };
@@ -134,11 +135,26 @@ const AdminTempAccess = () => {
                     onChange={(e) => setUserId(e.target.value)}
                     required
                   />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    The user can find their ID on their profile page after logging in.
-                  </p>
-                </div>
-                <Button type="submit" className="w-full" disabled={submitting}>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      The user can find their ID on their profile page after logging in.
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor="store_id">Assign Store *</Label>
+                    <Select value={selectedStoreId} onValueChange={setSelectedStoreId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a store" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {stores.map((store) => (
+                          <SelectItem key={store.id} value={store.id}>
+                            {store.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? "Granting..." : "Grant Temp Access"}
                 </Button>
               </form>
@@ -177,6 +193,7 @@ const AdminTempAccess = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>User ID</TableHead>
+                    <TableHead>Assigned Store</TableHead>
                     <TableHead>Granted On</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -186,6 +203,9 @@ const AdminTempAccess = () => {
                     <TableRow key={admin.id}>
                       <TableCell className="font-mono text-sm">
                         {admin.user_id.slice(0, 8)}...{admin.user_id.slice(-4)}
+                      </TableCell>
+                      <TableCell>
+                        {admin.stores?.name || "Unknown Store"}
                       </TableCell>
                       <TableCell>
                         {new Date(admin.created_at).toLocaleDateString()}

@@ -48,6 +48,10 @@ const WorkoutVIP = () => {
       .maybeSingle();
 
     if (accessError || !access) {
+      if (accessError) {
+        console.error("Access check error:", accessError);
+        toast.error("Error checking VIP access: " + accessError.message);
+      }
       setHasAccess(false);
       setLoading(false);
       return;
@@ -108,7 +112,28 @@ const WorkoutVIP = () => {
   }
 
   if (!profile?.assessment_completed) {
-    return <WorkoutAssessment userId={user.id} onComplete={checkAccessAndProfile} />;
+    return <WorkoutAssessment userId={user?.id || ''} onComplete={checkAccessAndProfile} />;
+  }
+
+  if (exercises.length === 0) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4 text-center">
+         <div className="bg-primary/10 p-6 rounded-full mb-6">
+           <Dumbbell className="w-16 h-16 text-primary opacity-20" />
+         </div>
+         <h2 className="text-3xl font-bold font-outfit mb-2">No Exercises Found</h2>
+         <p className="text-muted-foreground max-w-md mb-8">
+           We couldn't find any exercises for the goal: <span className="font-bold text-primary capitalize">{profile.fitness_goal}</span>. 
+           Please ensure exercises have been added to the database for this category.
+         </p>
+         <div className="flex flex-col gap-4">
+           <Button onClick={() => setProfile(null)} variant="outline">
+             Reset Assessment
+           </Button>
+           <p className="text-[10px] text-muted-foreground opacity-30">Debug: User ID {user?.id}</p>
+         </div>
+      </div>
+    );
   }
 
   return (

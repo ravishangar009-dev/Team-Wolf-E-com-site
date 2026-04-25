@@ -243,22 +243,41 @@ const Cart = () => {
         // Auto-decrement inventory stock count
         for (const item of (items as any[])) {
           try {
-            // Get current stock
+            // Get current stock and flavors
             const { data: prodData } = await supabase
               .from("products")
-              .select("stock_count")
+              .select("stock_count, flavors")
               .eq("id", item.id)
               .single();
 
-            if (prodData && prodData.stock_count !== null) {
-              const newCount = Math.max(0, prodData.stock_count - item.quantity);
-              await supabase
-                .from("products")
-                .update({ 
-                  stock_count: newCount,
-                  in_stock: newCount > 0
-                })
-                .eq("id", item.id);
+            if (prodData) {
+              const updates: any = {};
+              
+              // Update total stock count
+              if (prodData.stock_count !== null) {
+                const newCount = Math.max(0, prodData.stock_count - item.quantity);
+                updates.stock_count = newCount;
+                updates.in_stock = newCount > 0;
+              }
+
+              // Update flavor stock if flavor was selected
+              if (item.selectedFlavor && prodData.flavors && Array.isArray(prodData.flavors)) {
+                const updatedFlavors = (prodData.flavors as any[]).map((f: any) => {
+                  if (typeof f === 'object' && f.name === item.selectedFlavor) {
+                    const currentFlavorStock = f.stock ?? (prodData.stock_count || 0);
+                    return { ...f, stock: Math.max(0, currentFlavorStock - item.quantity) };
+                  }
+                  return f;
+                });
+                updates.flavors = updatedFlavors;
+              }
+
+              if (Object.keys(updates).length > 0) {
+                await supabase
+                  .from("products")
+                  .update(updates)
+                  .eq("id", item.id);
+              }
             }
           } catch (e) {
             console.error("Failed to decrement inventory:", e);

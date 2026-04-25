@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, Clock, MapPin, Phone, Star, Search, Plus, Minus, ShoppingCart } from "lucide-react";
+import { ArrowLeft, Clock, MapPin, Phone, Star, Search, Plus, Minus, ShoppingCart, BookOpen } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import ProductRequestForm from "@/components/ProductRequestForm";
 import StoreReviews from "@/components/StoreReviews";
@@ -28,7 +28,8 @@ interface Product {
   offer_percentage: number | null;
   offer_price: number | null;
   offer_active: boolean | null;
-  flavors?: { name: string; image_url: string }[] | null;
+  flavors?: { name: string; image_url: string; stock?: number; price?: number }[] | null;
+  usage_guide?: string | null;
   store_id?: string;
 }
 
@@ -123,7 +124,9 @@ const StoreDetail = () => {
       const normalizedData = productsData.map((p) => ({
         ...p,
         flavors: (p.flavors || []).map((f: any) =>
-          typeof f === "string" ? { name: f, image_url: "" } : f
+          typeof f === "string" 
+            ? { name: f, image_url: "", stock: p.stock_count || 0, price: p.price } 
+            : { ...f, stock: f.stock ?? (p.stock_count || 0), price: f.price ?? p.price }
         ),
       }));
       setProducts(normalizedData as Product[]);
@@ -138,6 +141,23 @@ const StoreDetail = () => {
     const activeFlavorName = getSelectedFlavor(product);
     const activeFlavor = product.flavors.find(f => f.name === activeFlavorName);
     return activeFlavor?.image_url || product.image_url;
+  };
+
+  const isFlavorOutOfStock = (product: Product, flavorName?: string) => {
+    if (!product.in_stock) return true;
+    const name = flavorName || getSelectedFlavor(product);
+    if (!product.flavors || product.flavors.length === 0) return (product.stock_count ?? 0) <= 0;
+    const flavor = product.flavors.find(f => f.name === name);
+    return flavor ? (flavor.stock ?? 0) <= 0 : (product.stock_count ?? 0) <= 0;
+  };
+
+  const getProductPrice = (product: Product) => {
+    const flavor = getSelectedFlavor(product);
+    if (product.flavors && product.flavors.length > 0 && flavor) {
+      const flavorData = product.flavors.find(f => f.name === flavor);
+      if (flavorData?.price) return flavorData.price;
+    }
+    return product.price;
   };
 
   const getProductQuantity = (product: Product) => {
@@ -163,11 +183,12 @@ const StoreDetail = () => {
         toast.success(`${product.name} removed from cart`);
       }
     } else if (change > 0) {
-      const effectivePrice = calculateVIPPrice(product);
+      const price = getProductPrice(product);
+      const effectivePrice = isVIP ? calculateVIPPrice({ ...product, price }) : (product.offer_active && product.offer_price ? product.offer_price : price);
       newCart.push({
         ...product,
         price: effectivePrice,
-        originalPrice: product.price,
+        originalPrice: price,
         quantity: 1,
         selectedFlavor: flavor,
         storeId: id,
@@ -322,14 +343,26 @@ const StoreDetail = () => {
                     onClick={() => setSelectedProduct(product)}
                   >
                     {getActiveImage(product) ? (
-                      <img
-                        src={getActiveImage(product)!}
-                        alt={product.name}
-                        className="w-full h-full object-cover rounded-md hover:scale-105 transition-transform duration-300"
-                      />
+                      <>
+                        <img
+                          src={getActiveImage(product)!}
+                          alt={product.name}
+                          className={`w-full h-full object-cover rounded-md hover:scale-105 transition-transform duration-300 ${isFlavorOutOfStock(product) ? 'grayscale opacity-60' : ''}`}
+                        />
+                        {isFlavorOutOfStock(product) && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-md">
+                            <span className="text-white font-bold text-xs uppercase tracking-wider rotate-12 border-2 border-white px-2 py-1">Out of Stock</span>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="w-full h-full bg-muted flex items-center justify-center rounded-md">
                         <ShoppingCart className="w-8 h-8 text-muted-foreground/30" />
+                        {isFlavorOutOfStock(product) && (
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-md">
+                            <span className="text-white font-bold text-xs uppercase tracking-wider rotate-12 border-2 border-white px-1 py-0.5">Out of Stock</span>
+                          </div>
+                        )}
                       </div>
                     )}
                     {product.offer_active && product.offer_percentage && (
@@ -389,11 +422,30 @@ const StoreDetail = () => {
                           </span>
                         )}
                       </div>
+                      
+                      {product.usage_guide && (
+                        <div className="flex items-center mt-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-[10px] uppercase font-bold text-muted-foreground hover:text-primary gap-1 px-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedProduct(product);
+                              // We could add a specific state for usage guide if needed, 
+                              // but for now let's just make it visible in the selection modal too.
+                            }}
+                          >
+                            <BookOpen className="w-3 h-3" />
+                            Usage Guide
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex items-center justify-end mt-4">
-                      {!product.in_stock ? (
-                        <Badge variant="destructive">Out of Stock</Badge>
+                      {isFlavorOutOfStock(product) ? (
+                        <Badge variant="destructive" className="uppercase font-bold tracking-tighter">Sold Out</Badge>
                       ) : (!product.flavors || product.flavors.length === 0) ? (
                         <div className="flex items-center gap-2">
                           {quantity === 0 ? (
@@ -482,10 +534,22 @@ const StoreDetail = () => {
             <div className="space-y-4">
               <div className="relative w-full h-48 rounded-lg overflow-hidden bg-muted">
                 {getActiveImage(selectedProduct) ? (
-                  <img src={getActiveImage(selectedProduct)!} alt={selectedProduct.name} className="w-full h-full object-cover" />
+                  <>
+                    <img src={getActiveImage(selectedProduct)!} alt={selectedProduct.name} className={`w-full h-full object-cover ${isFlavorOutOfStock(selectedProduct) ? 'grayscale opacity-60' : ''}`} />
+                    {isFlavorOutOfStock(selectedProduct) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                        <span className="text-white font-bold text-xl uppercase tracking-widest rotate-12 border-4 border-white px-4 py-2">Out of Stock</span>
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
+                  <div className="w-full h-full flex items-center justify-center relative">
                     <ShoppingCart className="w-12 h-12 text-muted-foreground/30" />
+                    {isFlavorOutOfStock(selectedProduct) && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                        <span className="text-white font-bold text-xl uppercase tracking-widest rotate-12 border-4 border-white px-4 py-2">Out of Stock</span>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -496,8 +560,8 @@ const StoreDetail = () => {
                       <Crown className="w-4 h-4" /> VIP ELITE DISCOUNT APPLIED
                     </div>
                     <div className="flex items-baseline gap-2">
-                      <span className="font-bold text-3xl text-yellow-500">₹{calculateVIPPrice(selectedProduct)}</span>
-                      <span className="line-through text-muted-foreground text-sm">₹{selectedProduct.price}</span>
+                      <span className="font-bold text-3xl text-yellow-500">₹{calculateVIPPrice({ ...selectedProduct, price: getProductPrice(selectedProduct) })}</span>
+                      <span className="line-through text-muted-foreground text-sm">₹{getProductPrice(selectedProduct)}</span>
                     </div>
                   </div>
                 ) : selectedProduct.offer_active && selectedProduct.offer_price ? (
@@ -507,13 +571,29 @@ const StoreDetail = () => {
                     <Badge className="bg-primary text-primary-foreground">{selectedProduct.offer_percentage}% OFF</Badge>
                   </>
                 ) : (
-                  <span className="font-bold text-2xl text-primary">₹{selectedProduct.price}</span>
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-bold text-3xl text-primary">₹{getProductPrice(selectedProduct)}</span>
+                    {getProductPrice(selectedProduct) !== selectedProduct.price && (
+                      <span className="text-xs text-muted-foreground">(Base: ₹{selectedProduct.price})</span>
+                    )}
+                  </div>
                 )}
               </div>
               
               {selectedProduct.description && (
                 <div className="text-sm text-muted-foreground whitespace-pre-wrap">
                   {selectedProduct.description}
+                </div>
+              )}
+              
+              {selectedProduct.usage_guide && (
+                <div className="p-4 bg-primary/5 rounded-lg border border-primary/10">
+                  <h4 className="font-outfit font-bold text-sm flex items-center gap-2 mb-2 text-primary">
+                    <BookOpen className="w-4 h-4" /> How to Use
+                  </h4>
+                  <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed italic">
+                    {selectedProduct.usage_guide}
+                  </p>
                 </div>
               )}
 
@@ -532,17 +612,25 @@ const StoreDetail = () => {
                         <button
                           key={f.name}
                           onClick={() => setSelectedFlavors({ ...selectedFlavors, [selectedProduct.id]: f.name })}
-                          className={`relative overflow-hidden flex items-center justify-center rounded-md border-2 transition-all ${
+                          className={`relative overflow-hidden flex flex-col items-center justify-center rounded-md border-2 transition-all ${
                             isSelected 
                               ? 'border-primary ring-2 ring-primary ring-offset-1 ring-offset-background' 
-                              : 'border-border hover:border-primary/50 opacity-60 hover:opacity-100'
-                          } bg-card ${f.image_url ? 'w-16 h-16' : 'px-4 py-2'}`}
-                          title={f.name}
+                              : 'border-border hover:border-primary/50'
+                          } ${isFlavorOutOfStock(selectedProduct, f.name) ? 'opacity-40 grayscale cursor-not-allowed' : 'opacity-100'} bg-card ${f.image_url ? 'w-20 h-24' : 'px-4 py-2 min-w-[80px]'}`}
+                          title={`${f.name} ${isFlavorOutOfStock(selectedProduct, f.name) ? '(Out of Stock)' : ''}`}
                         >
                           {f.image_url ? (
-                            <img src={f.image_url} alt={f.name} className="w-full h-full object-cover" />
+                            <img src={f.image_url} alt={f.name} className="w-full h-16 object-cover" />
                           ) : (
                             <span className="text-xs font-semibold">{f.name}</span>
+                          )}
+                          {f.price && f.price !== selectedProduct.price && (
+                            <span className="text-[10px] font-bold text-primary mt-1">₹{f.price}</span>
+                          )}
+                          {isFlavorOutOfStock(selectedProduct, f.name) && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                              <div className="w-full h-[2px] bg-red-500 rotate-45 absolute" />
+                            </div>
                           )}
                         </button>
                       );
@@ -552,7 +640,11 @@ const StoreDetail = () => {
               )}
 
               <div className="pt-4 border-t">
-                {getProductQuantity(selectedProduct) === 0 ? (
+                {isFlavorOutOfStock(selectedProduct, selectedFlavors[selectedProduct.id] || (selectedProduct.flavors && selectedProduct.flavors[0]?.name)) ? (
+                  <Button className="w-full text-lg font-bold py-6 cursor-not-allowed" disabled variant="destructive">
+                    Currently Unavailable
+                  </Button>
+                ) : getProductQuantity(selectedProduct) === 0 ? (
                   <Button className="w-full text-lg font-bold py-6" onClick={() => updateCart(selectedProduct, 1)} disabled={!storeOpenNow}>
                     <Plus className="w-5 h-5 mr-2" /> Add to Cart
                   </Button>

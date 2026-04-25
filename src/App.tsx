@@ -23,6 +23,7 @@ import AdminVIPAccess from "./pages/admin/AdminVIPAccess";
 import AdminActivityLog from "./pages/admin/AdminActivityLog";
 import AdminLowStock from "./pages/admin/AdminLowStock";
 import AdminRevenue from "./pages/admin/AdminRevenue";
+import AdminStores from "./pages/admin/AdminStores";
 import StoreAdminDashboard from "./pages/store-admin/StoreAdminDashboard";
 import StoreAdminOrders from "./pages/store-admin/StoreAdminOrders";
 import StoreAdminProducts from "./pages/store-admin/StoreAdminProducts";
@@ -77,6 +78,7 @@ const App = () => (
           <Route path="/admin/activity-log" element={<AdminActivityLog />} />
           <Route path="/admin/low-stock" element={<AdminLowStock />} />
           <Route path="/admin/revenue" element={<AdminRevenue />} />
+          <Route path="/admin/stores" element={<AdminStores />} />
           <Route path="/admin/offers" element={<AdminOffers />} />
           <Route path="/admin/advertisements" element={<AdminAdvertisements />} />
           <Route path="/admin/delivery-agents" element={<AdminDeliveryAgents />} />

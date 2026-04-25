@@ -95,24 +95,24 @@ CREATE POLICY "Users can create order items for their orders"
 
 -- Insert sample stores
 INSERT INTO public.stores (name, category, image_url, address, phone, rating) VALUES
-  ('Fresh Mart Grocery', 'grocery', 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=400', 'Main Street, Kunnathur', '+91 9876543210', 4.5),
+  ('Team Wolf Supplement', 'grocery', 'https://images.unsplash.com/photo-1604719312566-8912e9227c6a?w=400', 'Main Street, Kunnathur', '+91 9876543210', 4.5),
   ('Green Pharmacy', 'medical', 'https://images.unsplash.com/photo-1576602976047-174e57a47881?w=400', 'Hospital Road, Kunnathur', '+91 9876543211', 4.7),
   ('Veggie Paradise', 'vegetables', 'https://images.unsplash.com/photo-1610348725531-843dff563e2c?w=400', 'Market Street, Kunnathur', '+91 9876543212', 4.3),
   ('Spice Kitchen', 'restaurant', 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=400', 'Food Court, Kunnathur', '+91 9876543213', 4.8),
   ('Sweet Treats Bakery', 'bakery', 'https://images.unsplash.com/photo-1555507036-ab1f4038808a?w=400', 'Baker Lane, Kunnathur', '+91 9876543214', 4.6);
 
--- Insert sample products for Fresh Mart Grocery
+-- Insert sample products for Team Wolf Supplement
 INSERT INTO public.products (store_id, name, description, price, image_url, category) 
 SELECT id, 'Fresh Milk 1L', 'Full cream fresh milk', 65, 'https://images.unsplash.com/photo-1550583724-b2692b85b150?w=300', 'dairy'
-FROM public.stores WHERE name = 'Fresh Mart Grocery';
+FROM public.stores WHERE name = 'Team Wolf Supplement';
 
 INSERT INTO public.products (store_id, name, description, price, image_url, category) 
 SELECT id, 'Brown Bread', 'Whole wheat bread loaf', 40, 'https://images.unsplash.com/photo-1509440159596-0249088772ff?w=300', 'bakery'
-FROM public.stores WHERE name = 'Fresh Mart Grocery';
+FROM public.stores WHERE name = 'Team Wolf Supplement';
 
 INSERT INTO public.products (store_id, name, description, price, image_url, category) 
 SELECT id, 'Basmati Rice 1kg', 'Premium quality basmati rice', 120, 'https://images.unsplash.com/photo-1586201375761-83865001e31c?w=300', 'grains'
-FROM public.stores WHERE name = 'Fresh Mart Grocery';
+FROM public.stores WHERE name = 'Team Wolf Supplement';
 
 -- Insert sample products for Green Pharmacy
 INSERT INTO public.products (store_id, name, description, price, image_url, category) 

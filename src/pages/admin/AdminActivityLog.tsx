@@ -2,8 +2,10 @@ import { useEffect, useState } from "react";
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ScrollText } from "lucide-react";
+import { ScrollText, Trash2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 interface LogEntry {
   id: string;
@@ -35,6 +37,22 @@ const AdminActivityLog = () => {
     fetchLogs();
   }, []);
 
+  const handleClearLogs = async () => {
+    if (!confirm("Are you sure you want to clear all activity logs? This action cannot be undone.")) return;
+
+    const { error } = await supabase
+      .from('product_audit_log')
+      .delete()
+      .neq('id', '00000000-0000-0000-0000-000000000000'); // Delete all rows
+      
+    if (error) {
+      toast.error("Failed to clear logs: " + error.message);
+    } else {
+      toast.success("All activity logs cleared");
+      setLogs([]);
+    }
+  };
+
   return (
     <AdminLayout>
       <div className="space-y-6">
@@ -45,11 +63,26 @@ const AdminActivityLog = () => {
 
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ScrollText className="w-5 h-5" />
-              Recent Activity
-            </CardTitle>
-            <CardDescription>Track all additions, edits, and deletions performed by admins</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <ScrollText className="w-5 h-5" />
+                  Recent Activity
+                </CardTitle>
+                <CardDescription>Track all additions, edits, and deletions performed by admins</CardDescription>
+              </div>
+              {logs.length > 0 && (
+                <Button 
+                  variant="destructive" 
+                  size="sm" 
+                  className="gap-2"
+                  onClick={handleClearLogs}
+                >
+                  <Trash2 className="w-4 h-4" />
+                  Clear All Logs
+                </Button>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             {loading ? (
