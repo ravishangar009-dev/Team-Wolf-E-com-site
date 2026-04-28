@@ -35,7 +35,7 @@ const GlobalSearch = () => {
 
     const { data } = await supabase
       .from("products")
-      .select("id, name, price, offer_price, offer_active, image_url, store_id")
+      .select("id, name, price, offer_price, offer_active, image_url, store_id, vip_discount_percentage")
       .ilike("name", `%${value.trim()}%`)
       .eq("in_stock", true)
       .limit(20);

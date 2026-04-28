@@ -16,6 +16,12 @@ interface VIPCustomer {
   user_id: string;
   global_discount: number;
   created_at: string;
+  profiles?: {
+    full_name: string | null;
+    phone: string | null;
+    address: string | null;
+    email?: string | null;
+  } | null;
 }
 
 interface Product {
@@ -56,7 +62,15 @@ export default function AdminVIPAccess() {
     setLoading(true);
     const { data, error } = await supabase
       .from("vip_customers")
-      .select("*")
+      .select(`
+        *,
+        profiles (
+          full_name,
+          phone,
+          address,
+          email
+        )
+      `)
       .order("created_at", { ascending: false });
     
     if (!error) setVips(data || []);
@@ -198,7 +212,8 @@ export default function AdminVIPAccess() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>User ID</TableHead>
+                  <TableHead>Customer Details</TableHead>
+                  <TableHead>Contact Info</TableHead>
                   <TableHead>Global Discount</TableHead>
                   <TableHead>Created</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -207,14 +222,30 @@ export default function AdminVIPAccess() {
               <TableBody>
                 {vips.map((vip) => (
                   <TableRow key={vip.id} className="group">
-                    <TableCell className="font-mono text-xs">{vip.user_id}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-bold">{vip.profiles?.full_name || "Unknown User"}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">{vip.user_id}</span>
+                        {vip.profiles?.address && (
+                          <span className="text-[10px] text-muted-foreground mt-1 max-w-[200px] truncate" title={vip.profiles.address}>
+                            📍 {vip.profiles.address}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-col gap-1 text-xs">
+                        <span className="font-medium">{vip.profiles?.email || "No Email"}</span>
+                        <span className="text-muted-foreground">{vip.profiles?.phone || "No Phone"}</span>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary" className="gap-1 bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20">
                         <Percent className="w-3 h-3" />
                         {vip.global_discount}%
                       </Badge>
                     </TableCell>
-                    <TableCell>{new Date(vip.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell className="text-xs">{new Date(vip.created_at).toLocaleDateString()}</TableCell>
                     <TableCell className="text-right space-x-2">
                       <Button 
                         variant="outline" 

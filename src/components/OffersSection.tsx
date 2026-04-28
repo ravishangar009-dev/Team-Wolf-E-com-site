@@ -32,7 +32,7 @@ const OffersSection = () => {
       const { data, error } = await supabase
         .from("products")
         .select(
-          "id,name,price,offer_price,offer_percentage,offer_active,image_url,store_id,stores(id,name)"
+          "id,name,price,offer_price,offer_percentage,offer_active,image_url,store_id,vip_discount_percentage,stores(id,name)"
         )
         .eq("offer_active", true)
         .order("created_at", { ascending: false })

@@ -36,25 +36,33 @@ export default function AdminRevenue() {
   const [recentBills, setRecentBills] = useState<OfflineBill[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("all");
+  const [customStartDate, setCustomStartDate] = useState<string>("");
+  const [customEndDate, setCustomEndDate] = useState<string>("");
 
   useEffect(() => {
     fetchRevenueData();
-  }, [timeRange]);
+  }, [timeRange, customStartDate, customEndDate]);
 
   const fetchRevenueData = async () => {
     setLoading(true);
     let startDate: Date | null = null;
+    let endDate: Date | null = null;
     const now = new Date();
 
     if (timeRange === "today") startDate = startOfDay(now);
     else if (timeRange === "week") startDate = startOfWeek(now);
     else if (timeRange === "month") startDate = startOfMonth(now);
     else if (timeRange === "last7") startDate = subDays(now, 7);
+    else if (timeRange === "custom") {
+      if (customStartDate) startDate = new Date(customStartDate);
+      if (customEndDate) endDate = new Date(customEndDate);
+    }
 
     try {
       // 1. Fetch Online Orders
-      let onlineQuery = supabase.from("orders").select("total_amount, status");
+      let onlineQuery = supabase.from("orders").select("total_amount, status, created_at");
       if (startDate) onlineQuery = onlineQuery.gte("created_at", startDate.toISOString());
+      if (endDate) onlineQuery = onlineQuery.lte("created_at", endDate.toISOString());
       
       const { data: onlineData } = await onlineQuery;
       const validOnline = onlineData?.filter(o => o.status !== "cancelled") || [];
@@ -63,6 +71,7 @@ export default function AdminRevenue() {
       // 2. Fetch Offline Bills
       let offlineQuery = supabase.from("offline_bills").select("id, total_amount, customer_name, created_at, payment_method").order("created_at", { ascending: false });
       if (startDate) offlineQuery = offlineQuery.gte("created_at", startDate.toISOString());
+      if (endDate) offlineQuery = offlineQuery.lte("created_at", endDate.toISOString());
       
       const { data: offlineData } = await offlineQuery;
       const offlineRevenue = offlineData?.reduce((sum, o) => sum + Number(o.total_amount), 0) || 0;
@@ -117,20 +126,27 @@ export default function AdminRevenue() {
   const handleExport = async () => {
     setLoading(true);
     let startDate: Date | null = null;
+    let endDate: Date | null = null;
     const now = new Date();
 
     if (timeRange === "today") startDate = startOfDay(now);
     else if (timeRange === "week") startDate = startOfWeek(now);
     else if (timeRange === "month") startDate = startOfMonth(now);
     else if (timeRange === "last7") startDate = subDays(now, 7);
+    else if (timeRange === "custom") {
+      if (customStartDate) startDate = new Date(customStartDate);
+      if (customEndDate) endDate = new Date(customEndDate);
+    }
 
     try {
       let onlineQuery = supabase.from("orders").select("id, total_amount, status, created_at");
       if (startDate) onlineQuery = onlineQuery.gte("created_at", startDate.toISOString());
+      if (endDate) onlineQuery = onlineQuery.lte("created_at", endDate.toISOString());
       const { data: onlineData } = await onlineQuery;
       
       let offlineQuery = supabase.from("offline_bills").select("id, total_amount, customer_name, created_at, payment_method");
       if (startDate) offlineQuery = offlineQuery.gte("created_at", startDate.toISOString());
+      if (endDate) offlineQuery = offlineQuery.lte("created_at", endDate.toISOString());
       const { data: offlineData } = await offlineQuery;
 
       const rows = [];
@@ -204,8 +220,28 @@ export default function AdminRevenue() {
                 <SelectItem value="last7">Last 7 Days</SelectItem>
                 <SelectItem value="week">This Week</SelectItem>
                 <SelectItem value="month">This Month</SelectItem>
+                <SelectItem value="custom">Custom Range</SelectItem>
               </SelectContent>
             </Select>
+
+            {timeRange === "custom" && (
+              <div className="flex items-center gap-2 animate-fade-in">
+                <input 
+                  type="date" 
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                />
+                <span className="text-muted-foreground text-sm">to</span>
+                <input 
+                  type="date" 
+                  className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                />
+              </div>
+            )}
+
             <Button 
               variant="outline" 
               size="icon" 

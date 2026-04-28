@@ -130,3 +130,6 @@ CREATE POLICY "Users can manage their own profile" ON public.user_workout_profil
 -- Ensure admins can update products (for stock deduction)
 DROP POLICY IF EXISTS "Admins can update products" ON public.products;
 CREATE POLICY "Admins can update products" ON public.products FOR UPDATE USING (has_role(auth.uid(), 'admin'::app_role));
+
+-- Add VIP discount percentage to products table
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS vip_discount_percentage numeric DEFAULT 0;

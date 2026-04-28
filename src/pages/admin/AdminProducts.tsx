@@ -19,6 +19,7 @@ interface ProductData {
   description: string | null;
   price: number;
   category: string | null;
+  brand: string | null;
   image_url: string | null;
   in_stock: boolean | null;
   stock_count?: number | null;
@@ -28,6 +29,7 @@ interface ProductData {
   offer_percentage: number | null;
   offer_price: number | null;
   offer_active: boolean | null;
+  vip_discount_percentage: number | null;
   usage_guide?: string | null;
   stores?: { name: string };
 }
@@ -48,6 +50,7 @@ const AdminProducts = () => {
     description: "",
     price: "",
     category: "",
+    brand: "",
     image_url: "",
     store_id: "",
     in_stock: true,
@@ -56,6 +59,8 @@ const AdminProducts = () => {
     flavors: [] as { name: string; image_url: string; stock: number; price?: number }[],
     offer_percentage: "",
     offer_active: false,
+    selling_price: "",
+    vip_discount_percentage: "",
     usage_guide: "",
   });
 
@@ -86,6 +91,7 @@ const AdminProducts = () => {
       description: "",
       price: "",
       category: "",
+      brand: "",
       image_url: "",
       store_id: "",
       in_stock: true,
@@ -94,6 +100,8 @@ const AdminProducts = () => {
       flavors: [],
       offer_percentage: "",
       offer_active: false,
+      selling_price: "",
+      vip_discount_percentage: "",
       usage_guide: "",
     });
     setEditingProduct(null);
@@ -122,6 +130,7 @@ const AdminProducts = () => {
       description: product.description || "",
       price: product.price.toString(),
       category: product.category || "",
+      brand: product.brand || "",
       image_url: product.image_url || "",
       store_id: product.store_id,
       in_stock: product.in_stock ?? true,
@@ -138,6 +147,8 @@ const AdminProducts = () => {
       }),
       offer_percentage: product.offer_percentage?.toString() || "",
       offer_active: product.offer_active ?? false,
+      selling_price: product.offer_price?.toString() || "",
+      vip_discount_percentage: product.vip_discount_percentage?.toString() || "",
       usage_guide: product.usage_guide || "",
     });
     setDialogOpen(true);
@@ -146,17 +157,26 @@ const AdminProducts = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const offerPercentage = formData.offer_percentage ? parseInt(formData.offer_percentage) : null;
     const price = parseFloat(formData.price);
-    const offerPrice = offerPercentage && formData.offer_active 
-      ? Math.round(price * (1 - offerPercentage / 100) * 100) / 100 
-      : null;
+    let offerPrice = formData.selling_price ? parseFloat(formData.selling_price) : null;
+    let offerPercentage = null;
+    let offerActive = false;
+
+    if (offerPrice && offerPrice < price) {
+      offerPercentage = Math.round(((price - offerPrice) / price) * 100);
+      offerActive = true;
+    } else if (offerPrice && offerPrice >= price) {
+      offerPrice = null; // Ignore selling price if it's not less than MRP
+    }
+
+    const vipDiscount = formData.vip_discount_percentage ? parseFloat(formData.vip_discount_percentage) : 0;
 
     const productData = {
       name: formData.name,
       description: formData.description || null,
       price,
       category: formData.category || null,
+      brand: formData.brand || null,
       image_url: formData.image_url || null,
       store_id: editingProduct ? editingProduct.store_id : (formData.store_id || stores[0]?.id),
       in_stock: formData.in_stock,
@@ -165,7 +185,8 @@ const AdminProducts = () => {
       flavors: formData.flavors.filter(f => f.name.trim() !== ""),
       offer_percentage: offerPercentage,
       offer_price: offerPrice,
-      offer_active: formData.offer_active,
+      offer_active: offerActive,
+      vip_discount_percentage: vipDiscount,
       usage_guide: formData.usage_guide || null,
     };
 
@@ -271,8 +292,17 @@ const AdminProducts = () => {
                   <Textarea id="usage_guide" placeholder="Instructions on how to use this product..." value={formData.usage_guide} onChange={(e) => setFormData({ ...formData, usage_guide: e.target.value })} />
                 </div>
                 <div>
-                  <Label htmlFor="price">Price (₹) *</Label>
+                  <Label htmlFor="price">MRP Price (₹) *</Label>
                   <Input id="price" type="number" step="0.01" value={formData.price} onChange={(e) => setFormData({ ...formData, price: e.target.value })} required />
+                </div>
+                <div>
+                  <Label htmlFor="selling_price">Selling Price (₹)</Label>
+                  <Input id="selling_price" type="number" step="0.01" value={formData.selling_price} onChange={(e) => setFormData({ ...formData, selling_price: e.target.value })} placeholder="Leave empty if no discount" />
+                </div>
+                <div>
+                  <Label htmlFor="vip_discount">VIP Customer Discount (%)</Label>
+                  <Input id="vip_discount" type="number" step="0.01" value={formData.vip_discount_percentage} onChange={(e) => setFormData({ ...formData, vip_discount_percentage: e.target.value })} placeholder="e.g. 10" />
+                  <p className="text-xs text-muted-foreground mt-1">This discount will apply automatically to VIP users.</p>
                 </div>
                 <div>
                   <Label htmlFor="stock">Stock Count</Label>
@@ -363,7 +393,11 @@ const AdminProducts = () => {
                 </div>
                 <div>
                   <Label htmlFor="category">Category</Label>
-                  <Input id="category" placeholder="e.g., Vegetables, Snacks" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} />
+                  <Input id="category" placeholder="e.g., Protein, Pre-workout" value={formData.category} onChange={(e) => setFormData({ ...formData, category: e.target.value })} />
+                </div>
+                <div>
+                  <Label htmlFor="brand">Brand Name</Label>
+                  <Input id="brand" placeholder="e.g., MuscleBlaze, ON" value={formData.brand} onChange={(e) => setFormData({ ...formData, brand: e.target.value })} />
                 </div>
                 <div>
                   <Label htmlFor="image_url">Image URL</Label>
@@ -379,37 +413,7 @@ const AdminProducts = () => {
                   />
                   <Label htmlFor="in_stock">In Stock</Label>
                 </div>
-                <div className="border-t pt-4 mt-2">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      <Percent className="w-4 h-4 text-primary" />
-                      <Label>Product Offer</Label>
-                    </div>
-                    <Switch
-                      checked={formData.offer_active}
-                      onCheckedChange={(checked) => setFormData({ ...formData, offer_active: checked })}
-                    />
-                  </div>
-                  {formData.offer_active && (
-                    <div>
-                      <Label htmlFor="offer_percentage">Discount Percentage (%)</Label>
-                      <Input
-                        id="offer_percentage"
-                        type="number"
-                        min="1"
-                        max="99"
-                        placeholder="e.g., 10"
-                        value={formData.offer_percentage}
-                        onChange={(e) => setFormData({ ...formData, offer_percentage: e.target.value })}
-                      />
-                      {formData.offer_percentage && formData.price && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Offer price: ₹{(parseFloat(formData.price) * (1 - parseInt(formData.offer_percentage) / 100)).toFixed(2)}
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
+
                 <Button type="submit" className="w-full">{editingProduct ? "Update Product" : "Create Product"}</Button>
               </form>
             </DialogContent>
@@ -431,9 +435,11 @@ const AdminProducts = () => {
                   <TableRow>
                     <TableHead>Name</TableHead>
                     <TableHead>Store</TableHead>
+                    <TableHead>Brand</TableHead>
                     <TableHead>Category</TableHead>
-                    <TableHead>Price</TableHead>
-                    <TableHead>Offer</TableHead>
+                    <TableHead>MRP Price</TableHead>
+                    <TableHead>Selling Price</TableHead>
+                    <TableHead>VIP Discount</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
@@ -441,24 +447,30 @@ const AdminProducts = () => {
                 <TableBody>
                   {products.map((product) => (
                     <TableRow key={product.id}>
-                      <TableCell className="font-medium">{product.name}</TableCell>
+                    <TableCell className="font-medium">{product.name}</TableCell>
                       <TableCell>{product.stores?.name || "-"}</TableCell>
+                      <TableCell>
+                        {product.brand ? (
+                          <span className="font-semibold text-xs">{product.brand}</span>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">-</span>
+                        )}
+                      </TableCell>
                       <TableCell>{product.category || "-"}</TableCell>
                       <TableCell>
-                        {product.offer_active && product.offer_price ? (
-                          <div>
-                            <span className="line-through text-muted-foreground text-sm">₹{product.price}</span>
-                            <span className="font-bold text-primary ml-2">₹{product.offer_price}</span>
-                          </div>
-                        ) : (
-                          <span className="font-bold text-primary">₹{product.price}</span>
+                        <span className="line-through text-muted-foreground">₹{product.price}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="font-bold text-primary">₹{product.offer_price || product.price}</span>
+                        {product.offer_active && product.offer_percentage && (
+                          <span className="ml-2 px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-700">
+                            {product.offer_percentage}% OFF
+                          </span>
                         )}
                       </TableCell>
                       <TableCell>
-                        {product.offer_active && product.offer_percentage ? (
-                          <span className="px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-700">
-                            {product.offer_percentage}% OFF
-                          </span>
+                        {product.vip_discount_percentage ? (
+                          <span className="text-blue-600 font-medium">{product.vip_discount_percentage}% OFF</span>
                         ) : (
                           <span className="text-muted-foreground text-xs">-</span>
                         )}

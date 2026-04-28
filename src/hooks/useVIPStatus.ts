@@ -100,6 +100,7 @@ export const useVIPStatus = () => {
     price: number;
     offer_active?: boolean | null;
     offer_price?: number | null;
+    vip_discount_percentage?: number | null;
   }) => {
     if (!status.isVIP) {
       return product.offer_active && product.offer_price ? product.offer_price : product.price;
@@ -114,8 +115,11 @@ export const useVIPStatus = () => {
 
     if (specificDiscount !== undefined) {
       vipPrice = standardPrice * (1 - specificDiscount / 100);
+    } else if (product.vip_discount_percentage) {
+      // 2. Apply product's built-in VIP discount
+      vipPrice = standardPrice * (1 - product.vip_discount_percentage / 100);
     } else if (status.globalDiscount > 0) {
-      // 2. Apply global VIP discount
+      // 3. Apply global VIP discount
       vipPrice = standardPrice * (1 - status.globalDiscount / 100);
     }
 

@@ -410,6 +410,8 @@ export type Database = {
           offer_percentage: number | null
           offer_price: number | null
           price: number
+          vip_discount_percentage?: number | null
+          brand?: string | null
           stock_count?: number | null
           alert_count?: number | null
           flavors?: string[] | null
@@ -427,6 +429,8 @@ export type Database = {
           offer_percentage?: number | null
           offer_price?: number | null
           price: number
+          vip_discount_percentage?: number | null
+          brand?: string | null
           stock_count?: number | null
           alert_count?: number | null
           flavors?: string[] | null
@@ -444,6 +448,8 @@ export type Database = {
           offer_percentage?: number | null
           offer_price?: number | null
           price?: number
+          vip_discount_percentage?: number | null
+          brand?: string | null
           stock_count?: number | null
           alert_count?: number | null
           flavors?: string[] | null

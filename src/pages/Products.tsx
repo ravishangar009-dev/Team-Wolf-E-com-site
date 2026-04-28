@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ArrowLeft, Search, ShoppingCart, Plus, Minus, BookOpen } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +26,8 @@ interface Product {
   offer_percentage: number | null;
   offer_price: number | null;
   offer_active: boolean | null;
+  vip_discount_percentage: number | null;
+  brand: string | null;
   store_id: string;
   flavors?: { name: string; image_url: string; stock?: number; price?: number }[] | null;
   usage_guide?: string | null;
@@ -151,7 +154,8 @@ const Products = () => {
 
   const filteredProducts = products.filter((p) => {
     const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      p.category?.toLowerCase().includes(searchTerm.toLowerCase());
+      p.category?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.brand?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesCategory = selectedCategory === "all" || p.category === selectedCategory;
     return matchesSearch && matchesCategory;
   });
@@ -182,17 +186,28 @@ const Products = () => {
         </div>
 
         {/* Category Filter */}
-        <div className="flex gap-2 overflow-x-auto pb-4 mb-8 animate-fade-in">
-          {categories.map((category) => (
+        <div className="flex items-center gap-3 mb-8 animate-fade-in">
+          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+            <SelectTrigger className="w-[220px]">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent>
+              {categories.map((category) => (
+                <SelectItem key={category} value={category} className="capitalize">
+                  {category === "all" ? "All Categories" : category}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {selectedCategory !== "all" && (
             <Badge
-              key={category}
-              variant={selectedCategory === category ? "default" : "outline"}
-              className="cursor-pointer whitespace-nowrap px-4 py-2 text-sm hover:scale-105 transition-transform capitalize"
-              onClick={() => setSelectedCategory(category)}
+              variant="secondary"
+              className="cursor-pointer px-3 py-1.5 text-xs hover:bg-destructive/20 transition-colors"
+              onClick={() => setSelectedCategory("all")}
             >
-              {category === "all" ? "All Products" : category}
+              Clear Filter ✕
             </Badge>
-          ))}
+          )}
         </div>
 
         {/* Products Grid */}
@@ -252,9 +267,9 @@ const Products = () => {
                           {product.offer_percentage}% OFF
                         </Badge>
                       )}
-                      {product.category && (
+                      {product.brand && (
                         <Badge variant="secondary" className="absolute top-3 right-3 bg-black/60 backdrop-blur-md border-white/10 text-white/90 text-[10px] uppercase font-bold tracking-wider z-10">
-                          {product.category}
+                          {product.brand}
                         </Badge>
                       )}
                     </div>
@@ -364,7 +379,7 @@ const Products = () => {
       {/* Product Details Modal */}
       {selectedProduct && (
         <Dialog open={!!selectedProduct} onOpenChange={(open) => !open && setSelectedProduct(null)}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-outfit text-xl">{selectedProduct.name}</DialogTitle>
               <DialogDescription>

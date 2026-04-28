@@ -6,7 +6,6 @@ import { ShoppingBag, Zap, Shield, Dumbbell, ChevronRight } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import DailyOffers from "@/components/DailyOffers";
 import AdvertisementGallery from "@/components/AdvertisementGallery";
-import OffersSection from "@/components/OffersSection";
 import { PushNotificationPrompt } from "@/components/PushNotificationPrompt";
 import MaintenanceWarningBanner from "@/components/MaintenanceWarningBanner";
 import GlobalSearch from "@/components/GlobalSearch";
@@ -173,9 +172,6 @@ const Home = () => {
 
       {/* Advertisement Gallery */}
       <AdvertisementGallery />
-
-      {/* Product Offers */}
-      <OffersSection />
 
       {/* Features Section */}
       <section className="container mx-auto px-4 py-16">

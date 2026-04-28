@@ -27,11 +27,14 @@ const StoreAdminProducts = () => {
     description: "",
     price: "",
     category: "",
+    brand: "",
     in_stock: true,
     image_url: "",
     stock_count: 0,
     alert_count: 5,
     flavors: [] as { name: string; image_url: string; stock: number; price?: number }[],
+    selling_price: "",
+    vip_discount_percentage: "",
     usage_guide: "",
   });
 
@@ -79,11 +82,14 @@ const StoreAdminProducts = () => {
       description: "",
       price: "",
       category: "",
+      brand: "",
       in_stock: true,
       image_url: "",
       stock_count: 0,
       alert_count: 5,
       flavors: [],
+      selling_price: "",
+      vip_discount_percentage: "",
       usage_guide: "",
     });
     setIsDialogOpen(true);
@@ -111,16 +117,35 @@ const StoreAdminProducts = () => {
     setSaving(true);
 
     try {
+      const price = Number(formData.price);
+      let offerPrice = formData.selling_price ? Number(formData.selling_price) : null;
+      let offerPercentage = null;
+      let offerActive = false;
+
+      if (offerPrice && offerPrice < price) {
+        offerPercentage = Math.round(((price - offerPrice) / price) * 100);
+        offerActive = true;
+      } else if (offerPrice && offerPrice >= price) {
+        offerPrice = null;
+      }
+
+      const vipDiscount = formData.vip_discount_percentage ? Number(formData.vip_discount_percentage) : 0;
+
       const productData = {
         name: formData.name,
         description: formData.description,
-        price: Number(formData.price),
+        price,
         category: formData.category,
+        brand: formData.brand || null,
         in_stock: formData.in_stock,
         image_url: formData.image_url,
         stock_count: Number(formData.stock_count),
         alert_count: Number(formData.alert_count),
         flavors: formData.flavors.filter(f => f.name.trim() !== ""),
+        offer_percentage: offerPercentage,
+        offer_price: offerPrice,
+        offer_active: offerActive,
+        vip_discount_percentage: vipDiscount,
         store_id: store.id,
         usage_guide: formData.usage_guide || null,
       };
@@ -228,14 +253,17 @@ const StoreAdminProducts = () => {
                   variant="outline" 
                   size="icon"
                   onClick={() => {
-                    setFormData({ 
+                     setFormData({ 
                       ...p, 
                       price: p.price.toString(),
+                      brand: p.brand || "",
                       flavors: (p.flavors || []).map((f: any) => 
                         typeof f === 'string' 
                           ? { name: f, image_url: "", stock: p.stock_count || 0, price: p.price } 
                           : { name: f.name || "", image_url: f.image_url || "", stock: f.stock ?? 0, price: f.price ?? p.price }
                       ),
+                      selling_price: p.offer_price?.toString() || "",
+                      vip_discount_percentage: p.vip_discount_percentage?.toString() || "",
                       usage_guide: p.usage_guide || "",
                     });
                     setIsDialogOpen(true);
@@ -278,12 +306,30 @@ const StoreAdminProducts = () => {
                   />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Price (₹) *</label>
+                  <label className="text-sm font-medium">MRP Price (₹) *</label>
                   <Input 
                     type="number"
                     value={formData.price}
                     onChange={e => setFormData({ ...formData, price: e.target.value })}
                     required
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Selling Price (₹)</label>
+                  <Input 
+                    type="number"
+                    value={formData.selling_price}
+                    onChange={e => setFormData({ ...formData, selling_price: e.target.value })}
+                    placeholder="Leave empty if no discount"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">VIP Customer Discount (%)</label>
+                  <Input 
+                    type="number"
+                    value={formData.vip_discount_percentage}
+                    onChange={e => setFormData({ ...formData, vip_discount_percentage: e.target.value })}
+                    placeholder="e.g. 10"
                   />
                 </div>
                 <div>
@@ -389,6 +435,14 @@ const StoreAdminProducts = () => {
                     value={formData.category}
                     onChange={e => setFormData({ ...formData, category: e.target.value })}
                     placeholder="e.g. Protein, Pre-workout"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium">Brand Name</label>
+                  <Input 
+                    value={formData.brand}
+                    onChange={e => setFormData({ ...formData, brand: e.target.value })}
+                    placeholder="e.g. MuscleBlaze, ON"
                   />
                 </div>
                 <div className="flex items-center justify-between border p-3 rounded-md">
